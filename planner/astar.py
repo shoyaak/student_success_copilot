@@ -8,15 +8,16 @@ def astar(planner):
     start_node = Node(start_state)
 
     frontier = []
-    heapq.heappush(frontier, (start_node.f, start_node))
+    counter = 0
+
+    heapq.heappush(frontier, (start_node.f, counter, start_node))
 
     visited = set()
-
     nodes_expanded = 0
 
     while frontier:
 
-        _, node = heapq.heappop(frontier)
+        _, _, node = heapq.heappop(frontier)
 
         nodes_expanded += 1
 
@@ -39,6 +40,7 @@ def astar(planner):
 
             child = Node(new_state, node, action, g, h)
 
-            heapq.heappush(frontier, (child.f, child))
+            counter += 1
+            heapq.heappush(frontier, (child.f, counter, child))
 
     return None, nodes_expanded
