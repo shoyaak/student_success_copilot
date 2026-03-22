@@ -5,9 +5,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
 
-# -------- DATASET GENERATION --------
+# -------- DATASET --------
 
-def generate_dataset(n=200):
+def generate_dataset(n=300):
 
     X = []
     y = []
@@ -19,22 +19,19 @@ def generate_dataset(n=200):
         workload = random.randint(1, 10)
         available_time = random.randint(1, 10)
 
-        # simple logic for labeling
-        risk_score = 0
+        # 🔥 более реалистичная формула
+        risk_score = (
+            (10 - confidence) * 0.3 +
+            stress * 0.4 +
+            max(0, workload - available_time) * 0.6
+        )
 
-        if confidence < 4:
-            risk_score += 1
-        if stress > 7:
-            risk_score += 1
-        if workload > available_time:
-            risk_score += 1
-
-        if risk_score == 0:
-            label = 0  # Low
-        elif risk_score == 1:
-            label = 1  # Medium
+        if risk_score < 3:
+            label = 0
+        elif risk_score < 6:
+            label = 1
         else:
-            label = 2  # High
+            label = 2
 
         X.append([confidence, stress, workload, available_time])
         y.append(label)
@@ -42,7 +39,7 @@ def generate_dataset(n=200):
     return X, y
 
 
-# -------- TRAIN MODEL --------
+# -------- TRAIN --------
 
 def train_model():
 
