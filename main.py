@@ -4,6 +4,7 @@ from planner.planner import Planner
 from planner.astar import astar
 from planner.bfs import bfs
 from planner.ml_model import train_model, predict_risk
+from planner.ai_tutor import AITutor
 
 from planner.rule_engine import RuleEngine
 from planner.rule_engine import (
@@ -18,6 +19,7 @@ from planner.rule_engine import (
     check_missing_data,
     interpret_risk
 )
+
 
 
 # -------- UI HELPERS --------
@@ -172,7 +174,6 @@ def main():
         "urgent_task": min(tasks, key=lambda t: t.deadline_day).name,
     }
 
-    # 🔥 добавляем анализ расписания
     analysis = analyze_schedule(tasks, result.state.schedule)
     data.update(analysis)
 
@@ -191,7 +192,6 @@ def main():
     engine.add_rule(stress_rule)
     engine.add_rule(workload_rule)
 
-    # 🔥 новые правила
     engine.add_rule(late_task_rule)
     engine.add_rule(overload_day_rule)
     engine.add_rule(weekend_rule)
@@ -274,10 +274,30 @@ def main():
     else:
         print("✅ Recommendation: Current plan is manageable")
 
+    # -------- AI TUTOR --------
 
-# -------- RUN --------
+    section("AI TUTOR")
+
+    tutor = AITutor()
+
+    schedule = result.state.schedule
+    risk = {"final": final_risk}
+
+    print("\n📊 Plan Explanation:")
+    for e in tutor.explain_plan(schedule):
+        print(f"  • {e}")
+
+    print("\n⚙️ Workload Insights:")
+    for w in tutor.explain_workload(data):
+        print(f"  • {w}")
+
+    print("\n💡 Smart Advice:")
+    for a in tutor.generate_advice(risk, data):
+        print(f"  • {a}")
 
 if __name__ == "__main__":
     main()
+
+
 
 

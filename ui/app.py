@@ -18,6 +18,8 @@ from planner.rule_engine import (
 
 from planner.ml_model import train_model, predict_risk
 
+from planner.ai_tutor import AITutor
+
 
 st.set_page_config(page_title="AI Study Planner", layout="wide")
 
@@ -167,6 +169,7 @@ if generate or regenerate:
 
             analysis = analyze_schedule(tasks, st.session_state.schedule)
             data.update(analysis)
+            st.session_state.data = data
 
 
             # -------- RULE ENGINE --------
@@ -314,3 +317,35 @@ algo, reason = choose_search_algorithm(tasks, available_slots)
 
 st.write(f"**Selected algorithm:** {algo}")
 st.write(f"**Reason:** {reason}")
+
+
+# -------- AI INTEGRATION --------
+if "schedule" in st.session_state and "risk" in st.session_state:
+
+    from planner.ai_tutor import AITutor
+
+    tutor = AITutor()
+
+    st.divider()
+    st.header("🧠 AI Tutor")
+
+    schedule = st.session_state.schedule
+    risk = st.session_state.risk
+    data = st.session_state.data
+
+    st.subheader("📊 Plan Explanation")
+    for e in tutor.explain_plan(schedule):
+        st.write(f"- {e}")
+
+    st.subheader("⚙️ Workload Insights")
+    for w in tutor.explain_workload(data):
+        st.write(f"- {w}")
+
+    st.subheader("💡 Smart Advice")
+    for a in tutor.generate_advice(risk, data):
+        st.write(f"- {a}")
+
+else:
+    st.divider()
+    st.header("🧠 AI Tutor")
+    st.info("Generate a plan to see AI Tutor insights")
