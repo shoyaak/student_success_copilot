@@ -1,3 +1,4 @@
+from main import choose_search_algorithm
 import streamlit as st
 
 from planner.task import Task
@@ -307,3 +308,9 @@ if "risk" in st.session_state:
   else:
       st.success(summary["advice"])
 
+st.subheader("🔍 Search Strategy")
+
+algo, reason = choose_search_algorithm(tasks, available_slots)
+
+st.write(f"**Selected algorithm:** {algo}")
+st.write(f"**Reason:** {reason}")

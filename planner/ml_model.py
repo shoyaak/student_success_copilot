@@ -46,7 +46,7 @@ def train_model():
     X, y = generate_dataset()
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2
+        X, y, test_size = 0.2, random_state = 42
     )
 
     model = LogisticRegression(max_iter=200)
@@ -58,7 +58,7 @@ def train_model():
     acc = accuracy_score(y_test, y_pred)
 
     print("\n--- ML MODEL ---")
-    print("Accuracy:", round(acc, 2))
+    print(f"Model Accuracy: {round(acc, 2)}")
 
     return model
 

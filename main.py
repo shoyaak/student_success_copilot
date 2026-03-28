@@ -2,6 +2,7 @@ from datetime import date
 from planner.task import Task
 from planner.planner import Planner
 from planner.astar import astar
+from planner.bfs import bfs
 from planner.ml_model import train_model, predict_risk
 
 from planner.rule_engine import RuleEngine
@@ -10,12 +11,22 @@ from planner.rule_engine import (
     confidence_rule,
     stress_rule,
     workload_rule,
+    late_task_rule,
+    overload_day_rule,
+    weekend_rule,
+    analyze_schedule,
     check_missing_data,
     interpret_risk
 )
 
 
-# -------- FORMAT SCHEDULE --------
+# -------- UI HELPERS --------
+
+def section(title):
+    print("\n" + "=" * 40)
+    print(title)
+    print("=" * 40)
+
 
 def format_schedule(schedule):
 
@@ -32,33 +43,24 @@ def format_schedule(schedule):
     grouped = {}
 
     for (day, slot), task in schedule.items():
+        grouped.setdefault(day, []).append((slot, task))
 
-        if day not in grouped:
-            grouped[day] = []
-
-        grouped[day].append((slot, task))
-
-    for day in sorted(grouped.keys()):
-
-        print(days_map[day] + ":")
-
+    for day in sorted(grouped):
+        print(f"\n📅 {days_map[day]}")
         for slot, task in sorted(grouped[day]):
-            print(f"  Slot {slot} → {task}")
+            print(f"  ⏰ Slot {slot:<2} | {task}")
 
-        print()
 
 def combine_risk(rule_score, ml_risk):
 
-    # переводим ML в число
     ml_map = {
         "Low": 0,
         "Medium": 1,
         "High": 2
     }
 
-    ml_value = ml_map[ml_risk]
+    ml_value = ml_map.get(ml_risk, 1)
 
-    # нормализуем rule_score (примерно)
     if rule_score < 1:
         rule_value = 0
     elif rule_score < 2:
@@ -66,10 +68,8 @@ def combine_risk(rule_score, ml_risk):
     else:
         rule_value = 2
 
-    # комбинируем
     final_value = round((rule_value * 0.6 + ml_value * 0.4))
 
-    # обратно в label
     reverse_map = {
         0: "Low",
         1: "Medium",
@@ -79,40 +79,110 @@ def combine_risk(rule_score, ml_risk):
     return reverse_map[final_value]
 
 
+# -------- DEMO SCENARIO --------
+
+def run_scenario(name, data, engine):
+    print(f"\n--- {name} ---")
+
+    score = engine.evaluate(data)
+    risk = interpret_risk(score)
+
+    print(f"Score: {round(score, 2)}")
+    print(f"Risk: {risk}")
+
+    print("Reasons:")
+    for e in engine.get_explanations():
+        print("  •", e)
+
+def choose_search_algorithm(tasks, available_slots):
+
+    complexity = len(tasks) * len(available_slots)
+
+    if complexity <= 10:
+        return "BFS", "Problem is small, BFS is sufficient"
+    else:
+        return "ASTAR", "Problem is complex, A* is more efficient due to heuristic"
+
+
 # -------- MAIN --------
 
 def main():
 
-    # --- INPUT DATA ---
+    print("\n🎓 Student Success Copilot (CLI Demo)")
+    print("Note: Full version available in Streamlit UI\n")
+
+    # -------- INPUT DATA --------
+
+    section("INPUT DATA")
 
     tasks = [
         Task("Math", 2, 3),
         Task("Physics", 2, 5)
     ]
 
+    for t in tasks:
+        print(f"- {t.name} | hours: {t.hours} | deadline: day {t.deadline_day}")
+
     available_slots = [
-        (1,1),(1,2),
-        (2,1),(2,2),
-        (3,1),
-        (4,1)
+        (1, 1), (1, 2),
+        (2, 1), (2, 2),
+        (3, 1),
+        (4, 1)
     ]
 
-    # --- PLANNER ---
+    print(f"\nAvailable slots: {len(available_slots)}")
+
+
+    # -------- PLANNER --------
+
+    section("SEARCH STRATEGY")
+
+    algo, reason = choose_search_algorithm(tasks, available_slots)
+
+    print(f"Selected algorithm: {algo}")
+    print(f"Reason: {reason}")
+
+    section("PLANNER")
 
     planner = Planner(tasks, available_slots)
 
-    result, nodes = astar(planner)
+    if algo == "BFS":
+        result, nodes = bfs(planner)
+    else:
+        result, nodes = astar(planner)
 
-    print("Nodes expanded:", nodes)
-    print()
+    
+    if not result:
+        print("❌ No valid schedule found")
+        return
 
-    print("Schedule:")
+    print(f"Nodes expanded: {nodes}")
+
+    section("SCHEDULE")
     format_schedule(result.state.schedule)
 
+    # -------- BASE DATA --------
 
-    # --- RULE ENGINE ---
+    data = {
+        "days_to_deadline": 1,
+        "confidence": 5,
+        "stress": 5,
+        "total_hours": sum(t.hours for t in tasks),
+        "available_hours": len(result.state.schedule),
+        "urgent_task": min(tasks, key=lambda t: t.deadline_day).name,
+    }
 
-    print("\n--- RULE ENGINE ---")
+    # 🔥 добавляем анализ расписания
+    analysis = analyze_schedule(tasks, result.state.schedule)
+    data.update(analysis)
+
+    print("\n📊 User Profile:")
+    print(f"Stress level: {data['stress']}/10")
+    print(f"Confidence: {data['confidence']}/10")
+
+    # -------- RULE ENGINE --------
+
+    section("RULE-BASED ANALYSIS")
 
     engine = RuleEngine()
 
@@ -121,49 +191,88 @@ def main():
     engine.add_rule(stress_rule)
     engine.add_rule(workload_rule)
 
-    # TEST DATA
-    data = {
-        "days_to_deadline": 1,
-        "confidence": 2,
-        "stress": 8,
-        "total_hours": 6,
-        "available_hours": 4
-    }
+    # 🔥 новые правила
+    engine.add_rule(late_task_rule)
+    engine.add_rule(overload_day_rule)
+    engine.add_rule(weekend_rule)
 
-    # BACKWARD CHAINING
     questions = check_missing_data(data)
 
     if questions:
-        print("Need more info:")
+        print("⚠️ Missing data:")
         for q in questions:
             print("-", q)
 
-    # FORWARD CHAINING
     score = engine.evaluate(data)
 
-    print("\nRule-based score:", score)
+    print(f"\nScore: {round(score,2)}")
 
-    print("Reasons:")
+    print("\n🧠 Why this decision was made:")
     for e in engine.get_explanations():
-        print("-", e)
+        print(f"  • {e}")
 
     risk_level = interpret_risk(score)
 
-    print("\nFinal Risk Level:", risk_level)
+    print(f"\nRule-based Risk Level: {risk_level}")
+
+    # -------- DEMO (LOW / MED / HIGH) --------
+
+    section("RULE ENGINE DEMO")
+
+    data_low = data.copy()
+    data_low.update({
+        "days_to_deadline": 5,
+        "confidence": 9,
+        "stress": 2
+    })
+
+    data_medium = data.copy()
+    data_medium.update({
+        "days_to_deadline": 2,
+        "confidence": 5,
+        "stress": 5
+    })
+
+    data_high = data.copy()
+    data_high.update({
+        "days_to_deadline": 1,
+        "confidence": 2,
+        "stress": 9,
+        "total_hours": 10,
+        "available_hours": 4,
+        "late_tasks": ["Math"],
+        "heavy_days": [1, 2],
+        "weekend_tasks": 2
+    })
+
+    run_scenario("LOW RISK", data_low, engine)
+    run_scenario("MEDIUM RISK", data_medium, engine)
+    run_scenario("HIGH RISK", data_high, engine)
 
     # -------- ML --------
 
-    model = train_model()
+    section("ML PREDICTION")
 
+    model = train_model()
     ml_risk = predict_risk(model, data)
 
-    print("\nML Predicted Risk:", ml_risk)
+    print(f"ML Predicted Risk: {ml_risk}")
+
+    # -------- FINAL --------
+
+    section("FINAL DECISION")
 
     final_risk = combine_risk(score, ml_risk)
 
-    print("\n--- FINAL DECISION ---")
-    print("Final Combined Risk:", final_risk)
+    print("\n🎯 SYSTEM OUTPUT")
+    print(f"Predicted Risk Level: {final_risk}")
 
+    if final_risk == "High":
+        print("⚠️ Recommendation: Reduce workload or prioritize urgent tasks")
+    elif final_risk == "Medium":
+        print("⚡ Recommendation: Monitor stress and adjust schedule")
+    else:
+        print("✅ Recommendation: Current plan is manageable")
 
 
 # -------- RUN --------
